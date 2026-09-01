@@ -1,8 +1,4 @@
-"""Parse a Garmin dive `.fit` file into a `Dive`.
-
-Used for `refresh.py --from-fit <file>` (fully offline, no Garmin auth) and,
-in the workflow, to fill in water temperature that the dive-summary JSON omits.
-"""
+"""Parse a Garmin dive `.fit` file (or a `.zip` containing one) into a `Dive`."""
 
 from __future__ import annotations
 
@@ -86,7 +82,6 @@ def parse_fit_bytes(data: bytes) -> Dive:
         start_local=start_local,
         divetime_s=float(divetime_s),
         max_depth_m=float(max_depth),
-        activity_id=None,  # the Connect activity id is not in the FIT; comes from the JSON
         avg_depth_m=_val(summ, "avg_depth"),
         water_temp_c=None if water_temp is None else float(water_temp),
         air_temp_c=None,

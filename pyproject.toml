@@ -1,19 +1,19 @@
 [project]
 name = "garmin-ssi"
-version = "0.1.0"
-description = "Fetch the latest Garmin dive and log it into the MySSI web logbook."
-requires-python = ">=3.12"
+version = "0.2.0"
+description = "Log a scuba dive into the MySSI web logbook from a .fit file."
+requires-python = ">=3.10"
 dependencies = [
-    "curl-cffi>=0.7",
     "fitparse>=1.2",
-    "garminconnect>=0.3.11",
 ]
 
 [project.optional-dependencies]
+# curl_cffi is used opportunistically by _http.py; stdlib urllib is the fallback
+# (and the only option on iOS / a-Shell). Not required.
+impersonate = ["curl-cffi>=0.7"]
 dev = ["pytest>=8"]
 
 [project.scripts]
-garmin-ssi = "garmin_ssi.refresh:main"
 garmin-ssi-fit = "garmin_ssi.fit_push:main"
 
 [build-system]

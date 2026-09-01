@@ -10,24 +10,23 @@ fingerprint impersonation, so `src/garmin_ssi/_http.py` falls back to stdlib
 
 ## 1. One-time setup in a-Shell
 
-Open a-Shell and run:
+Make a **fine-grained PAT** (github.com → Settings → Developer settings →
+Fine-grained tokens): repo access = `jjeff07/garmin` only, permission
+**Contents: Read-only**.
+
+In a-Shell, one command — pip-installs `fitparse`, fetches the code into
+`~/Documents/garmin_ssi/`, and scaffolds `~/Documents/.ssienv`:
 
 ```sh
-pip install fitparse
-mkdir -p ~/Documents/garmin_ssi
+GH_PAT=github_pat_xxx; curl -sfL -H "Authorization: Bearer $GH_PAT" \
+  https://raw.githubusercontent.com/jjeff07/garmin/main/scripts/ashell-install.sh \
+  | GH_PAT=$GH_PAT sh
 ```
 
-**Copy the code in.** In the Files app: `On My iPhone ▸ a-Shell ▸ garmin_ssi`,
-and drop in these files from `src/garmin_ssi/`:
+(Use `BRANCH=fit-only` before `sh` if that branch isn't merged yet:
+`... | GH_PAT=$GH_PAT BRANCH=fit-only sh`.)
 
-```
-__init__.py  _http.py  config.py  fit.py  fit_push.py
-model.py  ssi.py  ssi_push.py  ssi_sites.py
-```
-
-(`garmin.py` and `refresh.py` are the Garmin-API path — not needed here.)
-
-**Credentials file** — `~/Documents/.ssienv`, one `KEY=VALUE` per line:
+Then fill in `~/Documents/.ssienv`:
 
 ```sh
 cat > ~/Documents/.ssienv <<'EOF'
@@ -42,6 +41,9 @@ chmod 600 ~/Documents/.ssienv
 `SSI_DIVE_SITE_ID` is the fallback used when there are no coordinates near a
 known public dive site (e.g. an indoor pool). `1018800` = North Olmsted Rec
 Center, `1965` = White Star Quarry.
+
+**Updating later:** re-run the same one-liner (it re-fetches the `.py` files and
+leaves your `.ssienv` alone).
 
 **Smoke test** (no push):
 
@@ -90,4 +92,5 @@ Re-running the same file is a no-op (`--force` to override).
 
 ## 4. Updating
 
-Re-copy the nine `.py` files into `~/Documents/garmin_ssi/` whenever they change.
+Re-run the step-1 one-liner (or `sh ~/Documents/garmin_ssi/../ashell-install.sh`
+if you saved it). It re-fetches the nine `.py` files and keeps your `.ssienv`.

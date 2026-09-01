@@ -1,5 +1,5 @@
-"""Normalised dive record. Every source (dive-summary JSON, activity detail, FIT)
-maps into this shape; the SSI builder only ever sees a `Dive`."""
+"""Normalised dive record. A parsed `.fit` maps into this shape; the MySSI
+form builder only ever sees a `Dive`."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ class Dive:
     # max depth in metres
     max_depth_m: float
 
-    activity_id: int | None = None
     avg_depth_m: float | None = None
     water_temp_c: float | None = None
     air_temp_c: float | None = None
@@ -24,17 +23,5 @@ class Dive:
     dive_number: int | None = None
     water_type: str | None = None  # "fresh" | "salt" | None
     name: str | None = None
-    lat: float | None = None       # surface position (degrees), if the FIT/Garmin has one
+    lat: float | None = None       # surface position (degrees), if the FIT has one
     lng: float | None = None
-
-    def to_public_dict(self) -> dict:
-        """Metadata block published alongside the SSI string (for debugging / the watch UI)."""
-        return {
-            "activityId": self.activity_id,
-            "diveNumber": self.dive_number,
-            "startLocal": self.start_local.isoformat(),
-            "divetimeMin": round(self.divetime_s / 60),
-            "maxDepthM": round(self.max_depth_m, 1),
-            "waterTempC": None if self.water_temp_c is None else round(self.water_temp_c),
-            "name": self.name,
-        }
