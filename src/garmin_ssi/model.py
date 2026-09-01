@@ -24,6 +24,8 @@ class Dive:
     dive_number: int | None = None
     water_type: str | None = None  # "fresh" | "salt" | None
     name: str | None = None
+    lat: float | None = None       # surface position (degrees), if the FIT/Garmin has one
+    lng: float | None = None
 
     def to_public_dict(self) -> dict:
         """Metadata block published alongside the SSI string (for debugging / the watch UI)."""

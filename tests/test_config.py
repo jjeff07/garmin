@@ -19,6 +19,7 @@ def _cfg(**kw):
         ssi_password=None,
         ssi_cookie=None,
         ssi_dive_site_id=None,
+        ssi_api_key=None,
         ssi_divetype_id="24",
         ssi_comment="Imported from Garmin Descent",
         push_enabled=True,

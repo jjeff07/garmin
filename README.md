@@ -25,7 +25,9 @@ GitHub Action (every 6h + on demand)
 | `src/garmin_ssi/fit.py` | parse a dive `.fit` → normalised `Dive` |
 | `src/garmin_ssi/ssi_push.py` | map `Dive` → MySSI add-dive form + `SSIClient` login/POST |
 | `src/garmin_ssi/ssi.py` | build the compact `dive;noid;…` summary written to `latest.json` |
-| `src/garmin_ssi/refresh.py` | CLI entry point (`garmin-ssi`) |
+| `src/garmin_ssi/refresh.py` | CLI `garmin-ssi` — fetch newest dive from Garmin, push |
+| `src/garmin_ssi/fit_push.py` | CLI `garmin-ssi-fit` — push a dive from a local `.fit`, no Garmin |
+| `src/garmin_ssi/ssi_sites.py` | lat/lng → SSI dive-site id via the public locator API |
 | `bootstrap_token.py` | run once locally to mint the `GARMIN_TOKENS` secret |
 | `reference/` | reverse-engineered MySSI logbook API spec + field template |
 | `tests/` | pure-mapping tests against `tests/data/sample_dive.fit` |
@@ -138,3 +140,51 @@ matches it skips the push. `--force-push` overrides; `--no-push` writes
 string (the MySSI QR-import format) — handy for eyeballing a run and, if MySSI's
 web login ever breaks, feeding a QR the phone app can scan. Git history has the
 earlier Connect IQ watch-app notes.
+
+## Alternative: FIT upload, no Garmin API
+
+`.github/workflows/fit-to-ssi.yml` + `garmin-ssi-fit` log a dive straight from a
+`.fit` file — no `garminconnect`, no 429s, no token to babysit. You supply the
+FIT; an Apple Shortcut can do it hands-free.
+
+```
+Garmin Connect app  → share the dive .fit → Shortcut base64-encodes it
+Shortcut → PUT .../contents/incoming/dive-<epoch>.fit    {content: <base64>, message: "dive [skip ci]"}
+        (+ if the pool/site has no GPS in the FIT, also PUT
+           .../contents/incoming/dive-<epoch>.json        {"lat": <Current Location>, "lng": ...})
+        Authorization: Bearer <fine-grained PAT, Contents: write, THIS repo>
+push to incoming/**.fit  → workflow runs garmin-ssi-fit  → dive in MySSI
+                         → moves the file(s) to processed/ [skip ci]
+```
+
+Pool dives have no GPS in the FIT, so the `.json` sidecar (Shortcut's **Get
+Current Location**) is what places them. Same `dive-<epoch>` stem for both files.
+
+- **Unique filename per dive** (`dive-<epoch>.fit`) so the Contents API always
+  *creates* (no `sha` fetch needed).
+- **`[skip ci]`** in the commit message is required so the workflow's own
+  archive commit doesn't loop.
+- Same SSI secrets as above (`SSI_EMAIL`/`SSI_PASSWORD`, `SSI_USER_ID`,
+  **`SSI_DIVE_SITE_ID`**). No Garmin secrets.
+- **Dedup:** a sha256 of each FIT is recorded in `state/pushed_fits.json`;
+  re-running or re-pushing the same file is a no-op (`--force` overrides).
+- Test without a Shortcut: `gh workflow run fit-to-ssi -f path=tests/data/sample_dive.fit`,
+  or locally `uv run garmin-ssi-fit tests/data/sample_dive.fit --dry-run`.
+
+### Dive site — resolved from GPS
+
+`fit_push.py` picks the dive site automatically:
+
+1. **The FIT's surface fix** — `session`/`lap` `start_position` / `end_position`
+   (a Descent only fixes GPS at the surface, but it's usually there). Failing
+   that, a `dive-<epoch>.json` sidecar `{"lat": …, "lng": …}` from the phone.
+2. Those coords → `POST www.divessi.com/api/locationServices.php` (the public
+   dive-site locator, `src/garmin_ssi/ssi_sites.py`) → nearest site within 5 km,
+   with its real `id`. No login; it self-fetches the `SSI_APIKEY` + session
+   cookie from the locator page.
+3. If there's no fix and no site within range → falls back to
+   `SSI_DIVE_SITE_ID`. If that's unset too, the dive is skipped (a site-less POST
+   is silently dropped by MySSI).
+
+`SSI_API_KEY` secret is optional (the locator fetches its own). `SSI_DIVE_SITE_ID`
+is now just the fallback — handy for a home pool that isn't in the public DB.

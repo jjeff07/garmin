@@ -103,7 +103,28 @@ The form submits **82 fields**; most can be empty strings but should be present.
 See [ssi_add_dive_payload.json](ssi_add_dive_payload.json) for the complete
 template captured from a real dive (values blanked except the ones we set).
 
-## Finding a dive-site id
+## Dive-site lookup by coordinates (public locator API)
+
+```
+1. GET https://www.divessi.com/en/locator/divesites
+   -> Set-Cookie: PHPSESSID=...   and   <script> var SSI_APIKEY = '<48 chars>'
+
+2. POST https://www.divessi.com/api/locationServices.php
+   Cookie: PHPSESSID=<from step 1>        (required)
+   x-ssi-auth: <SSI_APIKEY from step 1>   (required - either alone -> 401 {})
+   Content-Type: multipart/form-data, one field `request` =
+     {"type":"BOUNDS_CHANGED","filter":{"targets":["DiveSites"],
+      "geoBounds":{"south":..,"west":..,"north":..,"east":..},
+      "viewportCenter":{"lat":..,"lng":..}}}
+```
+
+Reply: `{"stats":{"total":N},"result":{"elements":[{"ident":"divesite","data":
+{"properties":{"id":"1965","name":"White Star Quarry","lat":"41.3716",
+"lng":"-83.3155","distanceToCenter":"2.03", ...}}}]}}`. No login needed.
+`SSI_APIKEY` is session-scoped (rotates); scrape it fresh each time.
+`locationSearch.php` (geocode a "lat,lng" string -> a bbox) is not needed.
+
+## Finding a dive-site id (manual)
 
 The site-search widget on `/mydivelog/add` resolves names → ids, but the easy way
 is to read `value="..." name="odin_user_log_dive_sites_id"` off any existing

@@ -250,6 +250,7 @@ def dive_from_summary(s: dict, src: DiveSource | None, *, use_fit: bool = True):
             f"newest diving activity {act_id} is missing start/depth - "
             f"is it a real recorded dive? ({s!r})"
         )
+    entry = s.get("entryLoc") or s.get("startLatitude") and {"latitude": s.get("startLatitude"), "longitude": s.get("startLongitude")}
     dive = Dive(
         start_local=_parse_iso_local(start),
         divetime_s=float(s.get("totalTime") or s.get("bottomTime") or 0.0),
@@ -260,6 +261,8 @@ def dive_from_summary(s: dict, src: DiveSource | None, *, use_fit: bool = True):
         surface_interval_s=_opt_int(s.get("surfaceInterval")),
         dive_number=_opt_int(s.get("number")),
         name=s.get("name"),
+        lat=_opt_float((entry or {}).get("latitude")),
+        lng=_opt_float((entry or {}).get("longitude")),
     )
     # dive-summary JSON carries no water temperature; the FIT does (real dives only).
     if use_fit and src is not None and act_id:

@@ -27,7 +27,8 @@ class Config:
     ssi_email: str | None           # -> SSI_EMAIL     } preferred: log in fresh each run,
     ssi_password: str | None        # -> SSI_PASSWORD  } nothing to expire
     ssi_cookie: str | None          # -> SSI_COOKIE    (override: whole `Cookie:` header)
-    ssi_dive_site_id: str | None    # your usual SSI dive-site DB id -> SSI_DIVE_SITE_ID (optional)
+    ssi_dive_site_id: str | None    # fallback SSI dive-site id -> SSI_DIVE_SITE_ID (used when no coords / no site found)
+    ssi_api_key: str | None         # -> SSI_API_KEY  (optional; the locator self-fetches one otherwise)
     ssi_divetype_id: str            # 23 Education / 24 Fun Dive / 138 Scientific / 139 Work
     ssi_comment: str                # note added to each imported dive
     push_enabled: bool              # PUSH_TO_SSI=0 to disable the logbook push
@@ -90,6 +91,7 @@ class Config:
             ssi_password=_env("SSI_PASSWORD"),
             ssi_cookie=_env("SSI_COOKIE"),
             ssi_dive_site_id=_env("SSI_DIVE_SITE_ID"),
+            ssi_api_key=_env("SSI_API_KEY"),
             ssi_divetype_id=_env("SSI_DIVETYPE_ID") or "24",
             ssi_comment=_env("SSI_COMMENT") or "Imported from Garmin Descent",
             push_enabled=os.environ.get("PUSH_TO_SSI", "1") not in ("0", "false", "no"),

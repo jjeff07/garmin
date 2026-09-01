@@ -74,17 +74,21 @@ def push_to_logbook(dive, cfg: Config) -> dict:
     latest.json / save a refreshed Garmin token before exiting non-zero.
     """
     from .ssi_push import dive_to_form
+    from .ssi_sites import site_for_dive
 
-    if not cfg.ssi_dive_site_id:
+    site_id, _ = site_for_dive(
+        dive, fallback_id=cfg.ssi_dive_site_id, api_key=cfg.ssi_api_key
+    )
+    if not site_id:
         return {
             "ok": False, "status": None, "bytes": 0,
-            "detail": "SSI_DIVE_SITE_ID is required - the MySSI logbook silently drops "
-                      "a dive with no site. Set it to your usual site's id (README).",
+            "detail": "no dive site - the dive has no coords near a known site and "
+                      "SSI_DIVE_SITE_ID is unset (site-less dives are silently dropped).",
         }
     body = dive_to_form(
         dive,
         cfg.identity,
-        dive_site_id=cfg.ssi_dive_site_id,
+        dive_site_id=site_id,
         divetype_id=cfg.ssi_divetype_id,
         comment=cfg.ssi_comment,
     )

@@ -80,6 +80,8 @@ def parse_fit_bytes(data: bytes) -> Dive:
     temps = [t for t in (_val(r, "temperature") for r in records) if t is not None]
     water_temp = min(temps) if temps else _val(session, "avg_temperature")
 
+    lat, lng = _surface_position(session, _first(messages, "lap"), records)
+
     return Dive(
         start_local=start_local,
         divetime_s=float(divetime_s),
@@ -92,7 +94,41 @@ def parse_fit_bytes(data: bytes) -> Dive:
         dive_number=_val(summ, "dive_number"),
         water_type=_val(dive_settings, "water_type"),
         name=_val(_first(messages, "sport"), "name"),
+        lat=lat,
+        lng=lng,
     )
+
+
+_SEMI_TO_DEG = 180.0 / (2**31)
+
+
+def _sc_to_deg(v):
+    """FIT positions are int32 semicircles."""
+    if v is None:
+        return None
+    d = v * _SEMI_TO_DEG
+    return d if -90.0 <= d <= 360.0 else None  # sanity
+
+
+def _surface_position(session, lap, records):
+    """First usable lat/lng: session/lap start or end fix, bbox corner, else any
+    record fix. A Descent only fixes GPS at the surface, so this is often absent."""
+    for msg, la, lo in (
+        (session, "start_position_lat", "start_position_long"),
+        (lap, "start_position_lat", "start_position_long"),
+        (session, "end_position_lat", "end_position_long"),
+        (lap, "end_position_lat", "end_position_long"),
+        (session, "nec_lat", "nec_long"),
+        (session, "swc_lat", "swc_long"),
+    ):
+        lat, lng = _sc_to_deg(_val(msg, la)), _sc_to_deg(_val(msg, lo))
+        if lat is not None and lng is not None:
+            return lat, (lng - 360.0 if lng > 180.0 else lng)
+    for r in records:
+        lat, lng = _sc_to_deg(_val(r, "position_lat")), _sc_to_deg(_val(r, "position_long"))
+        if lat is not None and lng is not None:
+            return lat, (lng - 360.0 if lng > 180.0 else lng)
+    return None, None
 
 
 def parse_fit_file(path: str | Path) -> Dive:
