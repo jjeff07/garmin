@@ -223,6 +223,41 @@ class SSIClient:
                 f"SSI login failed (status {r.status_code}). "
                 f"Check SSI_EMAIL / SSI_PASSWORD. Body: {text[:200]!r}"
             )
+        # The signin cookie is set for domain=.divessi.com; pin PHPSESSID/mid as an
+        # explicit header so every following request (any host) carries it -
+        # curl_cffi's jar has been seen to not send a parent-domain cookie to a
+        # sibling host.
+        self._pin_session_cookies()
+        # Follow the post-signin landing (www -> my) the browser does, so the
+        # session is fully established on the my.divessi.com host.
+        try:
+            self._s.get("https://www.divessi.com/myssi", timeout=30, allow_redirects=True)
+        except Exception:
+            pass
+        # Confirm the session is actually authenticated on the logbook host - a
+        # 200 to /mydivelog/add with the add form present means we're in.
+        chk = self._s.get(
+            "https://my.divessi.com/mydivelog/add", timeout=30, allow_redirects=True
+        )
+        if 'id="add_log"' not in (chk.text or ""):
+            raise SSIAuthError(
+                "signed in at www.divessi.com but the my.divessi.com session is not "
+                f"authenticated (status {chk.status_code}) - cookie did not carry over"
+            )
+
+    def _pin_session_cookies(self) -> None:
+        pairs = []
+        try:
+            for name in ("PHPSESSID", "mid"):
+                val = self._s.cookies.get(name)
+                if val:
+                    pairs.append(f"{name}={val}")
+        except Exception:
+            for c in getattr(self._s.cookies, "jar", []):
+                if getattr(c, "name", None) in ("PHPSESSID", "mid"):
+                    pairs.append(f"{c.name}={c.value}")
+        if pairs:
+            self._s.headers["Cookie"] = "; ".join(pairs)
 
     def create_dive(self, body: dict[str, str]) -> dict:
         r = self._s.post(
@@ -238,11 +273,46 @@ class SSIClient:
         )
         text = r.text or ""
         low = text.lower()
-        ok = r.status_code == 200 and "url=/mydivelog" in text and "/mydivelog/add" not in text
-        if ok:
-            detail = "created (redirect to /mydivelog)"
-        elif "login" in low or "sign in" in low or r.status_code in (301, 302, 401, 403):
-            detail = "session rejected - login/cookie invalid (see reference/ssi_logbook_api.md)"
-        else:
-            detail = f"unexpected response: {text[:280]!r}"
-        return {"ok": ok, "status": r.status_code, "bytes": len(text), "detail": detail}
+        redirected_ok = (
+            r.status_code == 200 and "url=/mydivelog" in text and "/mydivelog/add" not in text
+        )
+        if not redirected_ok:
+            if "login" in low or "sign in" in low or r.status_code in (301, 302, 401, 403):
+                detail = "session rejected - login/cookie invalid (reference/ssi_logbook_api.md)"
+            else:
+                detail = f"unexpected response: {text[:280]!r}"
+            return {"ok": False, "status": r.status_code, "bytes": len(text), "detail": detail}
+
+        # The redirect stub is returned even when an unauthenticated POST is
+        # silently dropped, so confirm the dive actually landed in the logbook.
+        found = self._verify_in_logbook(body)
+        if found is True:
+            return {"ok": True, "status": r.status_code, "bytes": len(text),
+                    "detail": "created and confirmed in logbook"}
+        if found is False:
+            return {"ok": False, "status": r.status_code, "bytes": len(text),
+                    "detail": "POST returned the success redirect but the dive is NOT "
+                              "in the logbook - the session was not authenticated"}
+        return {"ok": True, "status": r.status_code, "bytes": len(text),
+                "detail": "created (redirect ok; could not read logbook to confirm)"}
+
+    def _verify_in_logbook(self, body: dict[str, str]) -> bool | None:
+        """True = our dive is in the logbook; False = logbook rendered but ours
+        is missing; None = couldn't read the logbook to tell."""
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        try:
+            dd = int(body["date_sel2_dd"])
+            mon = months[int(body["date_sel2_mm"]) - 1]
+            yy = body["date_sel2_yy"]
+        except Exception:
+            return None
+        try:
+            html = self._s.get("https://my.divessi.com/mydivelog", timeout=30).text or ""
+        except Exception:
+            return None
+        if "mydivelog/show/" not in html:  # table didn't render -> can't judge
+            return None
+        depth = body.get("odin_user_log_depth_m", "")
+        date_hit = any(v in html for v in (f"{dd:02d} {mon} {yy}", f"{dd} {mon} {yy}"))
+        return bool(date_hit and (not depth or depth in html))
