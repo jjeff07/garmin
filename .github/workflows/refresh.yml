@@ -14,7 +14,7 @@ on:
       ssi_dive_site_id:
         description: "Override the SSI_DIVE_SITE_ID secret for this run (blank = use the secret). Required overall - a site-less dive is silently dropped. e.g. 1018800=North Olmsted, 1965=White Star Quarry"
         required: false
-        default: ""
+        default: "1018800"
       ssi_divetype_id:
         description: "SSI dive type: 23 Education / 24 Fun Dive / 138 Scientific / 139 Work"
         required: false
