@@ -122,6 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     if not cfg.identity.user_master_id:
         print("WARNING: SSI_USER_ID unset - the dive may not attach to your MySSI profile.")
 
+    print(
+        f"resolved dive [{source}] #{dive.dive_number} "
+        f"start_local={dive.start_local.isoformat()} "
+        f"divetime={round(dive.divetime_s / 60)}min "
+        f"maxDepth={dive.max_depth_m:.1f}m "
+        f"waterTemp={dive.water_temp_c}"
+    )
+
     key = dive_key(dive)
     prev = _read_existing(cfg.output_path)
     already_pushed = (prev.get("pushed") or {}).get("key") == key

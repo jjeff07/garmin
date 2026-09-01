@@ -4,6 +4,7 @@ from dive_qr.garmin import (
     GarminError,
     _activities_to_summaries,
     _extract_dives,
+    _merge_activity_detail,
     dive_from_summary,
 )
 
@@ -55,3 +56,28 @@ def test_dive_from_summary_activity_list_shape():
 def test_dive_from_summary_rejects_non_dive():
     with pytest.raises(GarminError):
         dive_from_summary({"activityId": 5, "startTimeLocal": "2026-01-01 08:00:00"}, None, use_fit=False)
+
+
+def test_merge_activity_detail_overlays_summarydto():
+    summary = {"connectActivityId": 99, "startTime": "2026-06-06 17:10:50", "maxDepth": None}
+    detail = {
+        "summaryDTO": {
+            "startTimeLocal": "2026-06-06T17:10:50.0",
+            "startTimeGMT": "2026-06-06T21:10:50.0",
+            "duration": 1414.3,
+            "movingDuration": 1354.0,
+            "maxDepth": 3.847,
+            "averageDepth": 2.9,
+            "minTemperature": 27.0,
+        }
+    }
+    _merge_activity_detail(summary, detail)
+    assert summary["startTime"] == "2026-06-06T17:10:50.0"
+    assert summary["totalTime"] == 1414.3
+    assert summary["maxDepth"] == 3.847
+    assert summary["waterTempC"] == 27.0
+
+    dv = dive_from_summary(summary, None, use_fit=False)
+    assert dv.start_local.strftime("%Y%m%d%H%M") == "202606061710"
+    assert round(dv.divetime_s / 60) == 24
+    assert dv.water_temp_c == 27.0

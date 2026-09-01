@@ -109,16 +109,14 @@ class GarminConnectSource:
         if isinstance(acts, dict):
             acts = acts.get("activityList") or acts.get("activities") or []
         summaries = _activities_to_summaries(acts)
-        if summaries and summaries[0].get("maxDepth") is None:
-            # the list item lacks depth; pull it from the activity detail
+        # The list item's start/duration/depth are thin and sometimes only GMT.
+        # Overlay the authoritative activity detail for the newest one.
+        if summaries:
             try:
-                top = summaries[0]
-                d = self._g.get_activity(str(top["connectActivityId"])) or {}
-                sd = d.get("summaryDTO", {}) or {}
-                top["maxDepth"] = sd.get("maxDepth")
-                top["avgDepth"] = sd.get("averageDepth")
+                d = self._g.get_activity(str(summaries[0]["connectActivityId"])) or {}
+                _merge_activity_detail(summaries[0], d)
             except Exception as e:
-                print(f"  (activity detail enrich skipped: {e})")
+                print(f"  (activity detail fetch failed: {e})")
         return summaries
 
     def download_fit(self, activity_id: int) -> bytes:
@@ -195,7 +193,8 @@ def _activities_to_summaries(acts: list[dict]) -> list[dict]:
         out.append(
             {
                 "connectActivityId": a.get("activityId"),
-                "startTime": a.get("startTimeLocal") or a.get("startTimeGMT"),
+                "startTime": a.get("startTimeLocal"),  # local wall time; do NOT fall back to GMT
+                "startTimeGMT": a.get("startTimeGMT"),
                 "totalTime": a.get("duration"),
                 "bottomTime": a.get("movingDuration") or a.get("duration"),
                 "maxDepth": a.get("maxDepth"),
@@ -205,6 +204,29 @@ def _activities_to_summaries(acts: list[dict]) -> list[dict]:
         )
     out.sort(key=_start_key, reverse=True)
     return out
+
+
+def _merge_activity_detail(summary: dict, detail: dict) -> None:
+    """Overlay the authoritative `summaryDTO` fields from get_activity() onto a
+    thin activity-list summary (start time, duration, depth, temperature)."""
+    sd = (detail or {}).get("summaryDTO") or {}
+    if sd.get("startTimeLocal"):
+        summary["startTime"] = sd["startTimeLocal"]
+    if sd.get("startTimeGMT"):
+        summary["startTimeGMT"] = sd["startTimeGMT"]
+    for src, dst in (
+        ("duration", "totalTime"),
+        ("movingDuration", "bottomTime"),
+        ("maxDepth", "maxDepth"),
+        ("averageDepth", "avgDepth"),
+    ):
+        if sd.get(src) is not None:
+            summary[dst] = sd[src]
+    # water temp: summaryDTO carries it for dives; saves needing the FIT
+    for k in ("minTemperature", "waterTemperature", "averageTemperature"):
+        if sd.get(k) is not None:
+            summary["waterTempC"] = sd[k]
+            break
 
 
 def build_latest_dive(src: DiveSource, *, use_fit: bool = True):
@@ -218,7 +240,10 @@ def dive_from_summary(s: dict, src: DiveSource | None, *, use_fit: bool = True):
     from .model import Dive
 
     act_id = s.get("connectActivityId") or s.get("activityId")
-    start = s.get("startTime") or s.get("startTimeGMT") or s.get("startTimeLocal")
+    start = s.get("startTime") or s.get("startTimeLocal")
+    if not start and s.get("startTimeGMT"):
+        start = s["startTimeGMT"]
+        print("  WARNING: only a GMT start time available - logged time may be off by the tz offset")
     depth = s.get("maxDepth")
     if not start or depth is None:
         raise GarminError(
@@ -231,18 +256,21 @@ def dive_from_summary(s: dict, src: DiveSource | None, *, use_fit: bool = True):
         max_depth_m=float(depth),
         activity_id=int(act_id) if act_id else None,
         avg_depth_m=_opt_float(s.get("avgDepth")),
+        water_temp_c=_opt_float(s.get("waterTempC")),
         surface_interval_s=_opt_int(s.get("surfaceInterval")),
         dive_number=_opt_int(s.get("number")),
         name=s.get("name"),
     )
-    # dive-summary JSON carries no water temperature; the FIT does.
+    # dive-summary JSON carries no water temperature; the FIT does (real dives only).
     if use_fit and src is not None and act_id:
         try:
             from .fit import parse_fit_bytes
 
             fit_dive = parse_fit_bytes(src.download_fit(int(act_id)))
-            dive.water_temp_c = fit_dive.water_temp_c
-            dive.water_type = fit_dive.water_type
+            if fit_dive.water_temp_c is not None:
+                dive.water_temp_c = fit_dive.water_temp_c
+            if fit_dive.water_type:
+                dive.water_type = fit_dive.water_type
             if not dive.divetime_s:
                 dive.divetime_s = fit_dive.divetime_s
         except Exception as e:  # enrichment only; never fatal
