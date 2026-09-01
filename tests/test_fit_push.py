@@ -3,6 +3,7 @@ from pathlib import Path
 
 from garmin_ssi.fit_push import (
     fit_sha,
+    load_env_file,
     load_ledger,
     main,
     read_coords,
@@ -30,6 +31,28 @@ def test_read_coords_sidecar(tmp_path):
     assert read_coords(str(fit)) is None
     (tmp_path / "dive-1.json").write_text(json.dumps({"lat": 41.49, "lng": -81.68}))
     assert read_coords(str(fit)) == (41.49, -81.68)
+
+
+def test_load_env_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("SSI_EMAIL", raising=False)
+    p = tmp_path / ".ssienv"
+    p.write_text('# creds\nexport SSI_EMAIL=me@x.com\nSSI_DIVE_SITE_ID="1965"\n\n')
+    load_env_file(str(p))
+    import os
+    assert os.environ["SSI_EMAIL"] == "me@x.com"
+    assert os.environ["SSI_DIVE_SITE_ID"] == "1965"
+
+
+def test_cli_lat_lng_override(capsys, monkeypatch):
+    import garmin_ssi.ssi_sites as ss
+    monkeypatch.setattr(
+        ss, "nearest_site_id",
+        lambda lat, lng, **k: {"id": "1965", "name": "White Star Quarry", "dist_km": 2.0},
+    )
+    rc = main([SAMPLE, "--lat", "41.3871", "--lng", "-83.3027", "--dry-run"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "White Star Quarry" in out and "41.3871,-83.3027" in out
 
 
 def test_dry_run_maps_without_auth(capsys):

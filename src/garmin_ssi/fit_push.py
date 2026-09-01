@@ -72,13 +72,34 @@ def resolve_site_id(dive, cfg: Config, fit_path: str | Path) -> str | None:
     return site_id
 
 
+def load_env_file(path: str) -> None:
+    """`KEY=VALUE` / `export KEY="VALUE"` lines -> os.environ (comments/blanks ok)."""
+    import os
+
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        line = line.removeprefix("export ").strip()
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ[k.strip()] = v.strip().strip("'\"")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="garmin-ssi-fit")
     ap.add_argument("fit", nargs="+", help="one or more .fit files")
+    ap.add_argument("--env-file", help="load SSI_* vars from a KEY=VALUE file")
+    ap.add_argument("--lat", type=float, help="dive latitude (overrides the FIT / sidecar)")
+    ap.add_argument("--lng", type=float, help="dive longitude")
     ap.add_argument("--ledger", default=LEDGER_PATH)
     ap.add_argument("--dry-run", action="store_true", help="parse + map only")
     ap.add_argument("--force", action="store_true", help="ignore the pushed-fits ledger")
     args = ap.parse_args(argv)
+
+    if args.env_file:
+        load_env_file(args.env_file)
 
     cfg = Config.from_env()
     ledger = load_ledger(args.ledger)
@@ -92,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         dive = parse_fit_file(f)
+        if args.lat is not None and args.lng is not None:
+            dive.lat, dive.lng = args.lat, args.lng
         site_id = resolve_site_id(dive, cfg, f)
         body = dive_to_form(
             dive, cfg.identity,

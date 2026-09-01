@@ -6,63 +6,88 @@ fingerprint impersonation, so `src/garmin_ssi/_http.py` falls back to stdlib
 `urllib` when `curl_cffi` isn't installed — which is the case in
 [a-Shell](https://github.com/holzschu/a-shell) on iOS.
 
-## One-time setup in a-Shell
+---
+
+## 1. One-time setup in a-Shell
+
+Open a-Shell and run:
 
 ```sh
 pip install fitparse
 mkdir -p ~/Documents/garmin_ssi
-# then copy src/garmin_ssi/*.py into ~/Documents/garmin_ssi/
-#   - Files.app drag & drop, or
-#   - a Shortcut "Put File" of a zip, unzip in a-Shell, or
-#   - pip install --no-deps "git+https://<TOKEN>@github.com/jjeff07/garmin"
 ```
 
-Store your SSI login where the script can read it (a-Shell keeps `~/Documents`
-between runs):
+**Copy the code in.** In the Files app: `On My iPhone ▸ a-Shell ▸ garmin_ssi`,
+and drop in these files from `src/garmin_ssi/`:
+
+```
+__init__.py  _http.py  config.py  fit.py  fit_push.py
+model.py  ssi.py  ssi_push.py  ssi_sites.py
+```
+
+(`garmin.py` and `refresh.py` are the Garmin-API path — not needed here.)
+
+**Credentials file** — `~/Documents/.ssienv`, one `KEY=VALUE` per line:
 
 ```sh
 cat > ~/Documents/.ssienv <<'EOF'
-export SSI_EMAIL='you@example.com'
-export SSI_PASSWORD='...'
-export SSI_USER_ID='4195537'
-export SSI_DIVE_SITE_ID='1018800'   # fallback (indoor pool etc.)
+SSI_EMAIL=you@example.com
+SSI_PASSWORD=your-myssi-password
+SSI_USER_ID=4195537
+SSI_DIVE_SITE_ID=1018800
 EOF
 chmod 600 ~/Documents/.ssienv
 ```
 
-## The run command
+`SSI_DIVE_SITE_ID` is the fallback used when there are no coordinates near a
+known public dive site (e.g. an indoor pool). `1018800` = North Olmsted Rec
+Center, `1965` = White Star Quarry.
+
+**Smoke test** (no push):
 
 ```sh
-cd ~/Documents && . ./.ssienv && python -m garmin_ssi.fit_push "$1"
+cd ~/Documents
+python -m garmin_ssi.fit_push some-dive.fit --env-file .ssienv --dry-run
 ```
 
-`$1` is the `.fit` file a-Shell received. If a `<same-stem>.json` file with
-`{"lat": .., "lng": ..}` sits next to it, the dive site is looked up from those
-coords; otherwise `SSI_DIVE_SITE_ID` is used. The FIT's own surface fix is used
-first if it has one.
+---
 
-Output on success: `MySSI: {'ok': True, 'detail': 'created (logbook N -> N+1 dives)'}`.
-A sha256 ledger at `~/Documents/state/pushed_fits.json` stops a re-run
-duplicating a dive (`--force` to override).
+## 2. The Shortcut
 
-## The Shortcut
+New Shortcut in the Shortcuts app, these actions in order:
 
-1. **Receive** the dive `.fit` (share sheet from Garmin Connect, or pick in Files).
-2. **Get Current Location** → build `{"lat": …, "lng": …}` text.
-3. **a-Shell → Put File**: the `.fit` as `dive.fit` into a-Shell's `~/Documents`.
-4. **a-Shell → Put File**: the location JSON as `dive.json` (same stem).
-5. **a-Shell → Execute Command** (run *In Extension* to stay in the background):
-   `cd ~/Documents && . ./.ssienv && python -m garmin_ssi.fit_push dive.fit`
-6. **a-Shell → Get File** / read the command output; show a notification with the
-   `ok` / `detail` line.
+| # | Action | Settings |
+|---|--------|----------|
+| 1 | **Get File** | Turn on *Show Document Picker*. (Or set the shortcut to *Receive Files from Share Sheet* and skip this.) |
+| 2 | **Get Current Location** | — |
+| 3 | **Save File** | File: the output of step 1. *Ask Where to Save* → **off**. Destination: `On My iPhone ▸ a-Shell ▸ dive.fit`. *Overwrite If File Exists* → **on**. |
+| 4 | **Text** | `cd ~/Documents && python -m garmin_ssi.fit_push dive.fit --env-file .ssienv --lat LAT --lng LNG 2>&1` — replace `LAT`/`LNG` by inserting the **Latitude** and **Longitude** magic variables from step 2. |
+| 5 | **Run a-Shell command** (a-Shell's action; may be *Execute Command*) | Command: the **Text** from step 4. Turn on **Run in Extension** (runs in the background, no app switch). |
+| 6 | **Show Notification** (or **Show Alert**) | Body: the output of step 5. |
 
-No repo, no PAT, no Actions, no cron. The only moving part is a-Shell + this
-folder of `.py` files.
+Add the Shortcut to the Share Sheet (Shortcut settings → *Show in Share Sheet*,
+accept *Files*) so you can run it straight from a `.fit` you exported.
 
-## Updating the code
+### Getting the `.fit` out of Garmin
 
-Re-copy `src/garmin_ssi/*.py` into `~/Documents/garmin_ssi/` whenever it changes.
-`_http.py`, `fit.py`, `fit_push.py`, `ssi_push.py`, `ssi_sites.py`, `ssi.py`,
-`model.py`, `config.py`, `__init__.py` — that's the whole FIT path. `garmin.py`
-and `refresh.py` are not needed on the phone (they're the Garmin-API path and do
-need `curl_cffi`).
+Garmin Connect app → the dive → **⋯ / Share** → **Export Original** (`.fit`) →
+save to Files, or share directly into the Shortcut.
+
+---
+
+## 3. What a run does
+
+```
+parse dive.fit  →  lat/lng from --lat/--lng (else the FIT's own surface fix,
+                    else SSI_DIVE_SITE_ID)
+             →  POST divessi.com locator  →  nearest dive-site id
+             →  log in to MySSI  →  POST the dive
+             →  record sha256 in ~/Documents/state/pushed_fits.json
+```
+
+Success prints `MySSI: {'ok': True, 'detail': 'created (logbook N -> N+1 dives)'}`.
+Re-running the same file is a no-op (`--force` to override).
+
+## 4. Updating
+
+Re-copy the nine `.py` files into `~/Documents/garmin_ssi/` whenever they change.
