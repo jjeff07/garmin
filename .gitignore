@@ -1,3 +1,11 @@
 # transient token hand-off file from the refresh workflow - never commit
 garmin_tokens.new
 .garmin_tokens*
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# keep uv.lock committed for reproducible CI installs
