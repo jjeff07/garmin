@@ -68,8 +68,12 @@ def persist_token(src, token_out: str | None) -> bool:
 
 
 def push_to_logbook(dive, cfg: Config) -> dict:
-    """Log in (if needed) and POST the dive into the MySSI web logbook."""
-    from .ssi_push import SSIAuthError, dive_to_form
+    """Log in (if needed) and POST the dive into the MySSI web logbook.
+
+    Never raises: a push failure returns a result dict so `main` can still write
+    latest.json / save a refreshed Garmin token before exiting non-zero.
+    """
+    from .ssi_push import dive_to_form
 
     body = dive_to_form(
         dive,
@@ -80,8 +84,8 @@ def push_to_logbook(dive, cfg: Config) -> dict:
     )
     try:
         return cfg.make_ssi_client().create_dive(body)
-    except SSIAuthError as e:
-        return {"ok": False, "status": None, "bytes": 0, "detail": str(e)}
+    except Exception as e:  # noqa: BLE001 - report, don't crash the run
+        return {"ok": False, "status": None, "bytes": 0, "detail": f"{type(e).__name__}: {e}"}
 
 
 def main(argv: list[str] | None = None) -> int:

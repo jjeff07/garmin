@@ -11,6 +11,8 @@ Full field reference: reference/ssi_logbook_api.md
 
 from __future__ import annotations
 
+import uuid
+
 from curl_cffi import requests
 
 from .model import Dive
@@ -189,19 +191,31 @@ class SSIClient:
 
     def _login(self, email: str, password: str) -> None:
         self._s.get(HOME, timeout=30)  # seed a PHPSESSID
-        # multipart form fields, no file uploads (the (None, value) idiom)
-        form = {
-            "username": (None, email),
-            "password": (None, password),
-            "rememberMe": (None, "off"),
-            "auth": (None, "Portal"),
-        }
+        # Reproduce the browser's multipart/form-data body by hand: curl_cffi does
+        # not accept requests' `files=` kwarg, and the signin endpoint was only
+        # ever observed accepting multipart.
+        boundary = "----WebKitFormBoundary" + uuid.uuid4().hex[:16]
+        fields = [
+            ("username", email),
+            ("password", password),
+            ("rememberMe", "off"),
+            ("auth", "Portal"),
+        ]
+        body = "".join(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
+            for name, value in fields
+        ) + f"--{boundary}--\r\n"
         r = self._s.post(
             SIGNIN,
-            files=form,
+            data=body.encode(),
             timeout=30,
             allow_redirects=False,
-            headers={"Origin": "https://www.divessi.com", "Referer": HOME},
+            headers={
+                "Origin": "https://www.divessi.com",
+                "Referer": HOME,
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
         )
         text = r.text or ""
         if not (r.status_code == 200 and "url=/myssi" in text):

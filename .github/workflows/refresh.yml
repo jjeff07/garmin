@@ -74,7 +74,8 @@ jobs:
         run: uv run dive-qr-refresh ${{ inputs.force_push == true && '--force-push' || '' }}
 
       - name: Update GARMIN_TOKENS secret if the token was refreshed
-        if: ${{ hashFiles('garmin_tokens.new') != '' }}
+        # always: a refreshed token must be saved even if a later step (SSI push) failed
+        if: ${{ always() && hashFiles('garmin_tokens.new') != '' }}
         env:
           # Fine-grained PAT, THIS repo only, permission: Secrets = Read and write.
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -91,6 +92,7 @@ jobs:
         run: rm -f garmin_tokens.new
 
       - name: Commit latest.json if changed
+        if: always()   # latest.json is written even when the push fails
         run: |
           git config user.name  "dive-qr-bot"
           git config user.email "dive-qr-bot@users.noreply.github.com"
