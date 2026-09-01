@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from dive_qr.model import Dive
-from dive_qr.ssi import Identity, build_ssi
+from garmin_ssi.model import Dive
+from garmin_ssi.ssi import Identity, build_ssi
 
 
 def _dive(**kw):

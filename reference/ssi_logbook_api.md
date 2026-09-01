@@ -72,8 +72,8 @@ Cookie: PHPSESSID=<session>; mid=<user_master_id>
 | `odin_user_log_vis_m` / `_ft` | | optional |
 | `odin_user_log_var_watertype_id` | `5` | **4 Fresh · 5 Salt** — from FIT `dive_settings.water_type` |
 | `odin_user_log_var_entry_id` | `22` | 21 Shore/Beach · 22 Boat Dive · 35 Other |
-| `odin_user_log_dive_sites_id` (hidden) | `222708` | SSI dive-site DB id — **not derivable**; store your home site in config, else leave `""` |
-| `dive_site_bow` (hidden) | `salt` | set alongside a site pick; `""` if no site |
+| `odin_user_log_dive_sites_id` (hidden) | `1018800` | **REQUIRED** — SSI dive-site DB id. With this empty, `mydivelog_18.php` returns the success redirect but **silently creates nothing**. Not derivable from Garmin; store your home site's id in config. |
+| `dive_site_bow` (hidden) | `` | optional — real dives have it empty; `salt`/`fresh` also accepted |
 | `odin_user_log_ean` (checkbox) / `odin_user_log_ean_percent` | on / `32` | FIT gas: 21% O2 → air, leave off |
 | `odin_user_log_buddy_ids[]` | | SSI buddy ids (config, optional) |
 | `odin_user_log_leader_nr` | | dive-leader DivePro # (config, optional) |
@@ -103,15 +103,29 @@ The form submits **82 fields**; most can be empty strings but should be present.
 See [ssi_add_dive_payload.json](ssi_add_dive_payload.json) for the complete
 template captured from a real dive (values blanked except the ones we set).
 
-## Open questions / risks
+## Finding a dive-site id
 
-1. **`PHPSESSID` lifetime.** PHP session cookie — likely dies after hours–days of
-   inactivity (`session.gc_maxlifetime`). Login had no "remember me". There may be
-   an httpOnly SSO cookie not visible to page JS. **Verify how long a copied
-   `PHPSESSID` keeps working** before committing to this over the QR path.
-   Refresh = re-copy from DevTools, same as Garmin cookie mode.
-2. Whether `mydivelog_18.php` server-validates a **required subset** or accepts
-   the full blank template. Mitigation: always POST the full template.
-3. Duplicate `odin_user_log_dive_nr` handling — the UI calls a validate endpoint;
-   the save may reject or silently allow dupes. Test.
-4. Test dive **#999 / log 28483436** is still in the logbook — delete it manually.
+The site-search widget on `/mydivelog/add` resolves names → ids, but the easy way
+is to read `value="..." name="odin_user_log_dive_sites_id"` off any existing
+dive's `/mydivelog/edit/<n>_<actid>_<uid>` page. Known ids for this account:
+`1018800` = North Olmsted Rec Center, `1965` = White Star Quarry.
+
+## Confirmed behaviour
+
+- **`odin_user_log_dive_sites_id` is mandatory** (see field table). Verified: a
+  POST from a fully-authenticated same-origin session with everything *except* a
+  site → 200 + redirect stub, logbook count unchanged. Add a real site id → dive
+  created.
+- **No CSRF / nonce.** Static form, no token field, no `X-Ssi-Auth` needed for
+  the portal login or the logbook POST.
+- **Auth:** `www.divessi.com/bridge/code/process/signin` (see Login) sets a
+  `.divessi.com` `PHPSESSID` that also works on `my.`. `curl_cffi`'s jar carries
+  it cross-host once the login itself succeeds.
+- Success detection: the 376-byte redirect stub is returned even when the POST is
+  dropped, so the client counts `/mydivelog/show/` links before/after.
+
+## Open questions
+
+1. `PHPSESSID` lifetime when logging in fresh each run (probably a non-issue
+   since we re-auth every run).
+2. Behaviour for a dive at a site not in SSI's DB (no id to send).

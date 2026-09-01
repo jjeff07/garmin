@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from dive_qr.fit import parse_fit_file
-from dive_qr.ssi import Identity, build_ssi
+from garmin_ssi.fit import parse_fit_file
+from garmin_ssi.ssi import Identity, build_ssi
 
 SAMPLE = Path(__file__).parent / "data" / "sample_dive.fit"
 

@@ -1,17 +1,17 @@
 {
-  "ssi": "dive;noid;dive_type:0;datetime:202609011319;divetime:22;depth_m:4.6;user_master_id:4195537;watertemp_c:27",
+  "ssi": "dive;noid;dive_type:0;datetime:202606061710;divetime:24;depth_m:3.8;user_master_id:4195537;watertemp_c:27",
   "dive": {
-    "activityId": 24199717347,
-    "diveNumber": null,
-    "startLocal": "2026-09-01T13:19:00",
-    "divetimeMin": 22,
-    "maxDepthM": 4.6,
+    "activityId": null,
+    "diveNumber": 5,
+    "startLocal": "2026-06-06T17:10:50",
+    "divetimeMin": 24,
+    "maxDepthM": 3.8,
     "waterTempC": 27,
-    "name": "Copy of Single-Gas Dive"
+    "name": "Single-Gas"
   },
-  "diveKey": "24199717347",
-  "source": "garminconnect",
-  "generatedAt": "2026-09-01T18:11:48Z",
+  "diveKey": "20260606_5",
+  "source": "fit",
+  "generatedAt": "2026-09-01T18:25:10Z",
   "schema": 2,
   "pushed": {
     "key": "24199717347",

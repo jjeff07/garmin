@@ -11,7 +11,7 @@ Full field reference: reference/ssi_logbook_api.md
 
 from __future__ import annotations
 
-import uuid
+import re
 
 from curl_cffi import requests
 
@@ -190,59 +190,55 @@ class SSIClient:
             raise ValueError("SSIClient needs email+password or cookie")
 
     def _login(self, email: str, password: str) -> None:
-        self._s.get(HOME, timeout=30)  # seed a PHPSESSID
-        # Reproduce the browser's multipart/form-data body by hand: curl_cffi does
-        # not accept requests' `files=` kwarg, and the signin endpoint was only
-        # ever observed accepting multipart.
-        boundary = "----WebKitFormBoundary" + uuid.uuid4().hex[:16]
-        fields = [
-            ("username", email),
-            ("password", password),
-            ("rememberMe", "off"),
-            ("auth", "Portal"),
-        ]
-        body = "".join(
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
-            for name, value in fields
-        ) + f"--{boundary}--\r\n"
+        pre = self._s.get(HOME, timeout=30)  # seed a PHPSESSID
+        form = {
+            "username": email,
+            "password": password,
+            "rememberMe": "off",
+            "auth": "Portal",
+        }
         r = self._s.post(
             SIGNIN,
-            data=body.encode(),
+            data=form,
             timeout=30,
             allow_redirects=False,
             headers={
                 "Origin": "https://www.divessi.com",
                 "Referer": HOME,
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "X-Requested-With": "XMLHttpRequest",
             },
         )
         text = r.text or ""
-        if not (r.status_code == 200 and "url=/myssi" in text):
+        print(
+            f"  SSI signin: pre={pre.status_code} post={r.status_code} "
+            f"cookies={sorted(self._s.cookies.keys())} body[:120]={text[:120]!r}"
+        )
+        ok = r.status_code == 200 and ("url=/myssi" in text or '"success":true' in text)
+        if not ok:
+            hint = ""
+            if "NOT_AUTHORIZED" in text or '"success":false' in text:
+                hint = " (credentials rejected by SSI - check SSI_EMAIL / SSI_PASSWORD)"
             raise SSIAuthError(
-                f"SSI login failed (status {r.status_code}). "
-                f"Check SSI_EMAIL / SSI_PASSWORD. Body: {text[:200]!r}"
+                f"SSI login failed (status {r.status_code}){hint}. Body: {text[:200]!r}"
             )
         # The signin cookie is set for domain=.divessi.com; pin PHPSESSID/mid as an
-        # explicit header so every following request (any host) carries it -
-        # curl_cffi's jar has been seen to not send a parent-domain cookie to a
-        # sibling host.
+        # explicit header so every following request (any host) carries it.
         self._pin_session_cookies()
-        # Follow the post-signin landing (www -> my) the browser does, so the
-        # session is fully established on the my.divessi.com host.
+        # Follow the browser's post-signin landing (www -> my).
         try:
             self._s.get("https://www.divessi.com/myssi", timeout=30, allow_redirects=True)
         except Exception:
             pass
-        # Confirm the session is actually authenticated on the logbook host - a
-        # 200 to /mydivelog/add with the add form present means we're in.
-        chk = self._s.get(
-            "https://my.divessi.com/mydivelog/add", timeout=30, allow_redirects=True
-        )
-        if 'id="add_log"' not in (chk.text or ""):
+        # Confirm the session is authenticated on the logbook host: the overview
+        # only lists existing dives (mydivelog/show/) when logged in.
+        chk = self._s.get("https://my.divessi.com/mydivelog", timeout=30, allow_redirects=True)
+        cbody = chk.text or ""
+        authed = "mydivelog/show/" in cbody or 'id="add_log"' in cbody or "Logbook - Overview" in cbody
+        print(f"  SSI logbook check: status={chk.status_code} authed={authed} len={len(cbody)}")
+        if not authed:
             raise SSIAuthError(
                 "signed in at www.divessi.com but the my.divessi.com session is not "
-                f"authenticated (status {chk.status_code}) - cookie did not carry over"
+                f"authenticated (status {chk.status_code}) - login or cookie carry-over failed"
             )
 
     def _pin_session_cookies(self) -> None:
@@ -260,6 +256,13 @@ class SSIClient:
             self._s.headers["Cookie"] = "; ".join(pairs)
 
     def create_dive(self, body: dict[str, str]) -> dict:
+        if not body.get("odin_user_log_dive_sites_id"):
+            return {
+                "ok": False, "status": None, "bytes": 0,
+                "detail": "no dive site - mydivelog_18.php silently drops a dive with no "
+                          "odin_user_log_dive_sites_id. Set SSI_DIVE_SITE_ID.",
+            }
+        before = self._dive_count()
         r = self._s.post(
             ENDPOINT,
             data=body,
@@ -283,36 +286,25 @@ class SSIClient:
                 detail = f"unexpected response: {text[:280]!r}"
             return {"ok": False, "status": r.status_code, "bytes": len(text), "detail": detail}
 
-        # The redirect stub is returned even when an unauthenticated POST is
-        # silently dropped, so confirm the dive actually landed in the logbook.
-        found = self._verify_in_logbook(body)
-        if found is True:
-            return {"ok": True, "status": r.status_code, "bytes": len(text),
-                    "detail": "created and confirmed in logbook"}
-        if found is False:
+        # The redirect stub is returned even when the POST is silently dropped, so
+        # confirm a new dive actually appeared.
+        after = self._dive_count()
+        if before is not None and after is not None:
+            if after > before:
+                return {"ok": True, "status": r.status_code, "bytes": len(text),
+                        "detail": f"created (logbook {before} -> {after} dives)"}
             return {"ok": False, "status": r.status_code, "bytes": len(text),
-                    "detail": "POST returned the success redirect but the dive is NOT "
-                              "in the logbook - the session was not authenticated"}
+                    "detail": f"POST accepted but no new dive appeared "
+                              f"({before} -> {after}) - a required field was rejected"}
         return {"ok": True, "status": r.status_code, "bytes": len(text),
                 "detail": "created (redirect ok; could not read logbook to confirm)"}
 
-    def _verify_in_logbook(self, body: dict[str, str]) -> bool | None:
-        """True = our dive is in the logbook; False = logbook rendered but ours
-        is missing; None = couldn't read the logbook to tell."""
-        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        try:
-            dd = int(body["date_sel2_dd"])
-            mon = months[int(body["date_sel2_mm"]) - 1]
-            yy = body["date_sel2_yy"]
-        except Exception:
-            return None
+    def _dive_count(self) -> int | None:
+        """Number of dives in the logbook overview, or None if it can't be read."""
         try:
             html = self._s.get("https://my.divessi.com/mydivelog", timeout=30).text or ""
         except Exception:
             return None
-        if "mydivelog/show/" not in html:  # table didn't render -> can't judge
+        if "mydivelog/show/" not in html:  # not the rendered table -> can't judge
             return None
-        depth = body.get("odin_user_log_depth_m", "")
-        date_hit = any(v in html for v in (f"{dd:02d} {mon} {yy}", f"{dd} {mon} {yy}"))
-        return bool(date_hit and (not depth or depth in html))
+        return len(set(re.findall(r"/mydivelog/show/([0-9_]+)", html)))

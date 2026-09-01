@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 
-from dive_qr.fit import parse_fit_file
-from dive_qr.model import Dive
-from dive_qr.ssi import Identity
-from dive_qr.ssi_push import DIVETYPE_FUN_DIVE, dive_to_form
+from garmin_ssi.fit import parse_fit_file
+from garmin_ssi.model import Dive
+from garmin_ssi.ssi import Identity
+from garmin_ssi.ssi_push import DIVETYPE_FUN_DIVE, dive_to_form
 
 SAMPLE = Path(__file__).parent / "data" / "sample_dive.fit"
 IDENT = Identity(user_master_id="4195537", first_name="Justin", last_name="Jeffery")

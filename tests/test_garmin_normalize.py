@@ -1,6 +1,6 @@
 import pytest
 
-from dive_qr.garmin import (
+from garmin_ssi.garmin import (
     GarminError,
     _activities_to_summaries,
     _extract_dives,

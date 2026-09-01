@@ -1,4 +1,4 @@
-from dive_qr.refresh import persist_token
+from garmin_ssi.refresh import persist_token
 
 
 class FakeSource:

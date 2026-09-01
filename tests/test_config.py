@@ -1,6 +1,6 @@
 import pytest
 
-from dive_qr.config import Config
+from garmin_ssi.config import Config
 
 
 def _cfg(**kw):

@@ -64,14 +64,15 @@ jobs:
           SSI_EMAIL: ${{ secrets.SSI_EMAIL }}
           SSI_PASSWORD: ${{ secrets.SSI_PASSWORD }}
           SSI_COOKIE: ${{ secrets.SSI_COOKIE }}
-          # Non-secret knobs: workflow_dispatch inputs; on schedule/dispatch these are
-          # empty and refresh.py falls back to its own defaults (24 / "Imported from Garmin Descent").
-          SSI_DIVE_SITE_ID: ${{ inputs.ssi_dive_site_id }}
+          # SSI_DIVE_SITE_ID is REQUIRED (logbook drops a site-less dive). Secret for
+          # scheduled runs; the workflow_dispatch input overrides it for one run.
+          SSI_DIVE_SITE_ID: ${{ inputs.ssi_dive_site_id || secrets.SSI_DIVE_SITE_ID }}
+          # divetype/comment: inputs with defaults; empty on schedule -> refresh.py defaults.
           SSI_DIVETYPE_ID: ${{ inputs.ssi_divetype_id }}
           SSI_COMMENT: ${{ inputs.ssi_comment }}
           OUTPUT_PATH: public/latest.json
           TOKEN_OUT: garmin_tokens.new       # written only if the token changed
-        run: uv run dive-qr-refresh ${{ inputs.force_push == true && '--force-push' || '' }}
+        run: uv run garmin-ssi ${{ inputs.force_push == true && '--force-push' || '' }}
 
       - name: Update GARMIN_TOKENS secret if the token was refreshed
         # always: a refreshed token must be saved even if a later step (SSI push) failed
@@ -94,8 +95,8 @@ jobs:
       - name: Commit latest.json if changed
         if: always()   # latest.json is written even when the push fails
         run: |
-          git config user.name  "dive-qr-bot"
-          git config user.email "dive-qr-bot@users.noreply.github.com"
+          git config user.name  "garmin-ssi-bot"
+          git config user.email "garmin-ssi-bot@users.noreply.github.com"
           git add public/latest.json
           if git diff --cached --quiet; then
             echo "no change"

@@ -1,12 +1,12 @@
 """Entry point: fetch the latest Garmin dive, push it into the MySSI logbook,
 and write latest.json (kept for debugging / the optional QR path).
 
-    uv run dive-qr-refresh                   # normal run
-    uv run dive-qr-refresh --from-fit f.fit  # offline: build from a local .fit, no Garmin auth
-    uv run dive-qr-refresh --probe           # dump raw dive-summary JSON, do nothing else
-    uv run dive-qr-refresh --dry-run         # print what would happen, no write, no push
-    uv run dive-qr-refresh --no-push         # write latest.json only, skip the logbook
-    uv run dive-qr-refresh --force-push      # push even if this dive was already pushed
+    uv run garmin-ssi                   # normal run
+    uv run garmin-ssi --from-fit f.fit  # offline: build from a local .fit, no Garmin auth
+    uv run garmin-ssi --probe           # dump raw dive-summary JSON, do nothing else
+    uv run garmin-ssi --dry-run         # print what would happen, no write, no push
+    uv run garmin-ssi --no-push         # write latest.json only, skip the logbook
+    uv run garmin-ssi --force-push      # push even if this dive was already pushed
 """
 
 from __future__ import annotations
@@ -75,6 +75,12 @@ def push_to_logbook(dive, cfg: Config) -> dict:
     """
     from .ssi_push import dive_to_form
 
+    if not cfg.ssi_dive_site_id:
+        return {
+            "ok": False, "status": None, "bytes": 0,
+            "detail": "SSI_DIVE_SITE_ID is required - the MySSI logbook silently drops "
+                      "a dive with no site. Set it to your usual site's id (README).",
+        }
     body = dive_to_form(
         dive,
         cfg.identity,
@@ -89,7 +95,7 @@ def push_to_logbook(dive, cfg: Config) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="dive-qr-refresh")
+    ap = argparse.ArgumentParser(prog="garmin-ssi")
     ap.add_argument("--from-fit", metavar="PATH", help="build from a local .fit, skip Garmin")
     ap.add_argument("--probe", action="store_true", help="print raw dive-summary JSON and exit")
     ap.add_argument("--dry-run", action="store_true", help="print plan, no write, no push")

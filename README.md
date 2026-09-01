@@ -9,7 +9,7 @@ GitHub Action (every 6h + on demand)
   ├─ GET /gcsalt-api/diving/v1/dive/summary     → newest dive
   ├─ GET /download-service/files/activity/<id>  → FIT (water temp, water type)
   ├─ POST my.divessi.com/code/process/mydivelog_18.php   ← dive appears in MySSI
-  └─ commit public/latest.json                  (debug snapshot + optional QR payload)
+  └─ commit public/latest.json                  (debug snapshot + dedup ledger)
 ```
 
 > Scrapes two **undocumented private web APIs** (Garmin Connect via the community
@@ -21,11 +21,11 @@ GitHub Action (every 6h + on demand)
 
 | Path | What |
 |---|---|
-| `src/dive_qr/garmin.py` | fetch newest dive (`GarminConnectSource` token/login, `CookieSource`) |
-| `src/dive_qr/fit.py` | parse a dive `.fit` → normalised `Dive` |
-| `src/dive_qr/ssi_push.py` | map `Dive` → MySSI add-dive form + `SSIClient` POST |
-| `src/dive_qr/ssi.py` | build the `dive;noid;…` QR string (kept for the optional watch path) |
-| `src/dive_qr/refresh.py` | CLI entry point (`dive-qr-refresh`) |
+| `src/garmin_ssi/garmin.py` | fetch newest dive (`GarminConnectSource` token/login, `CookieSource`) |
+| `src/garmin_ssi/fit.py` | parse a dive `.fit` → normalised `Dive` |
+| `src/garmin_ssi/ssi_push.py` | map `Dive` → MySSI add-dive form + `SSIClient` login/POST |
+| `src/garmin_ssi/ssi.py` | build the compact `dive;noid;…` summary written to `latest.json` |
+| `src/garmin_ssi/refresh.py` | CLI entry point (`garmin-ssi`) |
 | `bootstrap_token.py` | run once locally to mint the `GARMIN_TOKENS` secret |
 | `reference/` | reverse-engineered MySSI logbook API spec + field template |
 | `tests/` | pure-mapping tests against `tests/data/sample_dive.fit` |
@@ -34,7 +34,7 @@ GitHub Action (every 6h + on demand)
 
 ```bash
 uv run --extra dev pytest
-uv run dive-qr-refresh --from-fit tests/data/sample_dive.fit --dry-run
+uv run garmin-ssi --from-fit tests/data/sample_dive.fit --dry-run
 ```
 
 `--from-fit` runs the whole pipeline from a local `.fit` — no Garmin, no SSI.
@@ -66,23 +66,31 @@ without it the run still works but the token isn't persisted.
 gh secret set SSI_EMAIL           # your MySSI login email
 gh secret set SSI_PASSWORD        # your MySSI password
 gh secret set SSI_USER_ID         # your MySSI member id (Profile screen; a 7-digit number)
+gh secret set SSI_DIVE_SITE_ID    # REQUIRED - see below
 # optional:
 gh secret set SSI_FIRST_NAME
 gh secret set SSI_LAST_NAME
 ```
 
+**`SSI_DIVE_SITE_ID` is required.** `mydivelog_18.php` returns a success
+redirect but **silently creates nothing** if the dive has no site. Every import
+is logged against this one site; re-assign in MySSI afterwards if it was
+somewhere else. Find an id by opening any existing dive's edit page and reading
+`odin_user_log_dive_sites_id`, or search the site on the add-dive form. Known for
+this account: `1018800` (North Olmsted Rec Center), `1965` (White Star Quarry).
+
 Non-secret knobs are `workflow_dispatch` **inputs** (shown on the "Run workflow"
-form), not secrets:
+form):
 
 | Input | Default | |
 |---|---|---|
-| `ssi_dive_site_id` | *(blank)* | SSI dive-site DB id to log against; blank = none, pick the site in MySSI |
+| `ssi_dive_site_id` | *(blank)* | overrides the `SSI_DIVE_SITE_ID` secret for one manual run |
 | `ssi_divetype_id` | `24` | 23 Education / 24 Fun Dive / 138 Scientific / 139 Work |
 | `ssi_comment` | `Imported from Garmin Descent` | note on each imported dive |
 | `force_push` | `false` | log the dive even if it was already logged |
 
-On `schedule` / `repository_dispatch` runs these fall back to the same defaults
-(handled in `refresh.py`).
+`ssi_divetype_id` / `ssi_comment` fall back to those defaults on
+`schedule` / `repository_dispatch` runs (handled in `refresh.py`).
 
 `refresh.py` logs in each run at `www.divessi.com/bridge/code/process/signin`
 (multipart POST, no CSRF; the session cookie is `.divessi.com`-scoped so it also
@@ -120,14 +128,13 @@ matches it skips the push. `--force-push` overrides; `--no-push` writes
 | `depth_m` / `_ft`, `avg_depth_m` | maxDepth / avgDepth |
 | `watertemp_c` / `_f` | FIT min `record.temperature` |
 | `var_watertype_id` (4 fresh / 5 salt) | FIT `dive_settings.water_type` |
-| `dive_sites_id` | `ssi_dive_site_id` input (else blank — pick in MySSI) |
+| `dive_sites_id` | **`SSI_DIVE_SITE_ID`** (required; site-less dives are silently dropped) |
 | `user_master_id` | `SSI_USER_ID` |
 | `comment` | `ssi_comment` input |
 
 `airtemp`, `vis`, buddies, gas/nitrox, conditions: not sent — add in MySSI.
 
-## Optional: the QR / watch path
-
-`latest.json` still carries a `dive;noid;…` string. If you later want a Garmin
-watch widget to show it as a QR (e.g. MySSI auth breaks), it's there; see git
-history for the Connect IQ Contents-API fetch notes.
+`public/latest.json` also carries the same data as a one-line `dive;noid;…`
+string (the MySSI QR-import format) — handy for eyeballing a run and, if MySSI's
+web login ever breaks, feeding a QR the phone app can scan. Git history has the
+earlier Connect IQ watch-app notes.
