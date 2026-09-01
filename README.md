@@ -147,6 +147,10 @@ earlier Connect IQ watch-app notes.
 `.fit` file — no `garminconnect`, no 429s, no token to babysit. You supply the
 FIT; an Apple Shortcut can do it hands-free.
 
+> Or skip GitHub entirely and run it **on the phone** in a-Shell — the FIT path
+> falls back to stdlib `urllib` (no `curl_cffi`). See
+> [docs/phone-a-shell.md](docs/phone-a-shell.md).
+
 ```
 Garmin Connect app  → share the dive .fit → Shortcut base64-encodes it
 Shortcut → PUT .../contents/incoming/dive-<epoch>.fit    {content: <base64>, message: "dive [skip ci]"}

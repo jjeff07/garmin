@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from curl_cffi import requests
+from ._http import Session
 
 from .model import Dive
 from .ssi import Identity
@@ -180,7 +180,7 @@ class SSIClient:
         password: str | None = None,
         cookie: str | None = None,
     ):
-        self._s = requests.Session(impersonate="chrome")
+        self._s = Session()
         self._s.headers.update({"Accept": "*/*", "Accept-Language": "en-US,en;q=0.9"})
         if email and password:
             self._login(email, password)

@@ -44,9 +44,9 @@ def _f(v):
 
 class _Locator:
     def __init__(self, api_key: str | None = None):
-        from curl_cffi import requests
+        from ._http import Session
 
-        self._s = requests.Session(impersonate="chrome")
+        self._s = Session()
         self.api_key = (api_key or "").strip() or None
         if not self.api_key:
             try:
