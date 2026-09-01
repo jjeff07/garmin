@@ -1,14 +1,14 @@
 name: refresh-latest-dive
 
 on:
-  schedule:
+  # schedule:
     # Every 6h. First run (or any run where the token can't load) does a full
     # SSO login and then writes the fresh token back into the GARMIN_TOKENS
     # secret, so subsequent runs just refresh - no repeated logins.
     # For "log the dive right after I surface", trigger on demand:
     #   gh workflow run refresh-latest-dive
     #   or POST a repository_dispatch {"event_type":"dive"} from a phone shortcut.
-    - cron: "17 */6 * * *"
+    # - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       ssi_dive_site_id:
