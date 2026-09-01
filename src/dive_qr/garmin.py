@@ -21,7 +21,9 @@ from __future__ import annotations
 import datetime as dt
 from typing import Protocol
 
-DIVE_SUMMARY_PATH = "/gcsalt-api/diving/v1/dive/summary"
+# gcsalt-api lives on the web host, NOT connectapi.garmin.com (garminconnect's
+# connectapi()/connectwebproxy() both target the gateway, which 404s this path).
+DIVE_SUMMARY_URL = "https://connect.garmin.com/gcsalt-api/diving/v1/dive/summary"
 
 
 class GarminError(RuntimeError):
@@ -92,8 +94,32 @@ class GarminConnectSource:
         return cls(g)
 
     def list_dive_summaries(self) -> list[dict]:
-        body = self._g.connectapi(DIVE_SUMMARY_PATH)
-        return _extract_dives(body)
+        # Preferred: the purpose-built dive-summary endpoint on the web host,
+        # reached with garminconnect's already-authenticated bearer session.
+        try:
+            c = self._g.client
+            r = c._api_session.get(DIVE_SUMMARY_URL, headers=c.get_api_headers(), timeout=20)
+            if r.status_code == 200:
+                return _extract_dives(r.json())
+            print(f"  (dive-summary endpoint {r.status_code}; using activity list)")
+        except Exception as e:
+            print(f"  (dive-summary endpoint failed: {e}; using activity list)")
+        # Fallback: the gateway activity list, filtered to diving.
+        acts = self._g.get_activities(0, 25, activitytype="diving")
+        if isinstance(acts, dict):
+            acts = acts.get("activityList") or acts.get("activities") or []
+        summaries = _activities_to_summaries(acts)
+        if summaries and summaries[0].get("maxDepth") is None:
+            # the list item lacks depth; pull it from the activity detail
+            try:
+                top = summaries[0]
+                d = self._g.get_activity(str(top["connectActivityId"])) or {}
+                sd = d.get("summaryDTO", {}) or {}
+                top["maxDepth"] = sd.get("maxDepth")
+                top["avgDepth"] = sd.get("averageDepth")
+            except Exception as e:
+                print(f"  (activity detail enrich skipped: {e})")
+        return summaries
 
     def download_fit(self, activity_id: int) -> bytes:
         from garminconnect import Garmin
@@ -138,7 +164,7 @@ class CookieSource:
         return r
 
     def list_dive_summaries(self) -> list[dict]:
-        return _extract_dives(self._get(DIVE_SUMMARY_PATH).json())
+        return _extract_dives(self._get("/gcsalt-api/diving/v1/dive/summary").json())
 
     def download_fit(self, activity_id: int) -> bytes:
         return self._get(f"/download-service/files/activity/{activity_id}").content
@@ -147,6 +173,10 @@ class CookieSource:
 # --------------------------------------------------------------------------- #
 # normalisation
 # --------------------------------------------------------------------------- #
+def _start_key(d: dict) -> str:
+    return d.get("startTime") or d.get("startTimeGMT") or d.get("startTimeLocal") or ""
+
+
 def _extract_dives(body) -> list[dict]:
     if isinstance(body, dict):
         dives = body.get("diveActivities", [])
@@ -154,8 +184,27 @@ def _extract_dives(body) -> list[dict]:
         dives = body
     else:
         dives = []
-    dives.sort(key=lambda d: d.get("startTime", ""), reverse=True)
+    dives.sort(key=_start_key, reverse=True)
     return dives
+
+
+def _activities_to_summaries(acts: list[dict]) -> list[dict]:
+    """Map gateway activity-list items onto the dive-summary shape used below."""
+    out = []
+    for a in acts or []:
+        out.append(
+            {
+                "connectActivityId": a.get("activityId"),
+                "startTime": a.get("startTimeLocal") or a.get("startTimeGMT"),
+                "totalTime": a.get("duration"),
+                "bottomTime": a.get("movingDuration") or a.get("duration"),
+                "maxDepth": a.get("maxDepth"),
+                "avgDepth": a.get("averageDepth"),
+                "name": a.get("activityName"),
+            }
+        )
+    out.sort(key=_start_key, reverse=True)
+    return out
 
 
 def build_latest_dive(src: DiveSource, *, use_fit: bool = True):
@@ -169,10 +218,17 @@ def dive_from_summary(s: dict, src: DiveSource | None, *, use_fit: bool = True):
     from .model import Dive
 
     act_id = s.get("connectActivityId") or s.get("activityId")
+    start = s.get("startTime") or s.get("startTimeGMT") or s.get("startTimeLocal")
+    depth = s.get("maxDepth")
+    if not start or depth is None:
+        raise GarminError(
+            f"newest diving activity {act_id} is missing start/depth - "
+            f"is it a real recorded dive? ({s!r})"
+        )
     dive = Dive(
-        start_local=_parse_iso_local(s["startTime"]),
+        start_local=_parse_iso_local(start),
         divetime_s=float(s.get("totalTime") or s.get("bottomTime") or 0.0),
-        max_depth_m=float(s["maxDepth"]),
+        max_depth_m=float(depth),
         activity_id=int(act_id) if act_id else None,
         avg_depth_m=_opt_float(s.get("avgDepth")),
         surface_interval_s=_opt_int(s.get("surfaceInterval")),
