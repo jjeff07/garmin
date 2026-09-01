@@ -1,0 +1,26 @@
+[project]
+name = "garmin-dive-myssi"
+version = "0.1.0"
+description = "Fetch the latest Garmin dive and log it into the MySSI web logbook."
+requires-python = ">=3.11"
+dependencies = [
+    "curl-cffi>=0.7",
+    "fitparse>=1.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+dive-qr-refresh = "dive_qr.refresh:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dive_qr"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

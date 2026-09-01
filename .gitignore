@@ -1,0 +1,3 @@
+# transient token hand-off file from the refresh workflow - never commit
+garmin_tokens.new
+.garmin_tokens*

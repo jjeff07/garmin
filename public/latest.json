@@ -1,0 +1,16 @@
+{
+  "ssi": "dive;noid;dive_type:0;datetime:202606061710;divetime:24;depth_m:3.8;watertemp_c:27",
+  "dive": {
+    "activityId": 23156513045,
+    "diveNumber": 5,
+    "startLocal": "2026-06-06T17:10:50",
+    "divetimeMin": 24,
+    "maxDepthM": 3.8,
+    "waterTempC": 27,
+    "name": "Single-Gas"
+  },
+  "source": "fit",
+  "generatedAt": "2026-09-01T00:00:00Z",
+  "schema": 1,
+  "_note": "placeholder from proxy/tests/data/sample_dive.fit; replaced on first real workflow run"
+}
