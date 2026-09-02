@@ -3,7 +3,7 @@ from pathlib import Path
 
 from garmin_ssi.fit import parse_fit_file
 from garmin_ssi.model import Dive
-from garmin_ssi.ssi import Identity
+from garmin_ssi.model import Identity
 from garmin_ssi.ssi_push import DIVETYPE_FUN_DIVE, dive_to_form
 
 SAMPLE = Path(__file__).parent / "data" / "sample_dive.fit"

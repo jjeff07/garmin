@@ -1,9 +1,7 @@
 # Run it on the phone (a-Shell + Shortcuts) — no GitHub
 
-The FIT path (`garmin_ssi.fit_push`) never touches Garmin, so it needs only
-`fitparse` plus HTTP to `divessi.com`. `divessi.com` doesn't need browser-
-fingerprint impersonation, so `src/garmin_ssi/_http.py` falls back to stdlib
-`urllib` when `curl_cffi` isn't installed — which is the case in
+`garmin_ssi.fit_push` needs only `fitparse` plus stdlib `urllib` for HTTP to
+`divessi.com` — so it runs unchanged in
 [a-Shell](https://github.com/holzschu/a-shell) on iOS.
 
 ---

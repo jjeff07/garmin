@@ -39,21 +39,16 @@ secrets):
 | `SSI_COMMENT` | note on each dive (default "Imported from Garmin Descent") |
 | `SSI_API_KEY` | optional; the locator self-fetches one |
 
+Copy [`sample.env`](sample.env) to `.ssienv` and fill it in.
+
 CLI flags: `--env-file <file>` (load the vars), `--lat/--lng` (override coords),
 `--force` (ignore the pushed-fits ledger), `--dry-run`, `--ledger <path>`.
 
 ## On the phone (a-Shell + a Shortcut)
 
-No GitHub at all — export the `.fit` from Garmin Connect, a Shortcut hands it to
+No servers — export the `.fit` from Garmin Connect, a Shortcut hands it to
 a-Shell with your location, a-Shell runs `garmin-ssi-fit`.
 **→ [docs/phone-a-shell.md](docs/phone-a-shell.md)**
-
-## Via GitHub Actions
-
-`.github/workflows/fit-to-ssi.yml` runs on a push to `incoming/**.fit`. A
-Shortcut `PUT`s the base64 FIT to `.../contents/incoming/dive-<epoch>.fit`
-(fine-grained PAT, Contents: write; commit message ending `[skip ci]`); the job
-pushes the dive and moves the file to `processed/`. SSI secrets only.
 
 ## Dive site resolution
 
@@ -75,9 +70,9 @@ pushes the dive and moves the file to `processed/`. SSI secrets only.
 | `src/garmin_ssi/fit.py` | parse a `.fit` → `Dive` |
 | `src/garmin_ssi/ssi_sites.py` | lat/lng → SSI dive-site id (public locator) |
 | `src/garmin_ssi/ssi_push.py` | `Dive` → add-dive form + `SSIClient` login/POST |
-| `src/garmin_ssi/ssi.py` | compact `dive;noid;…` summary string + `Identity` |
 | `src/garmin_ssi/fit_push.py` | CLI `garmin-ssi-fit` |
-| `src/garmin_ssi/_http.py` | tiny session — `urllib`, or `curl_cffi` if installed |
+| `src/garmin_ssi/_http.py` | tiny stdlib-`urllib` HTTP session |
+| `sample.env` | copy to `.ssienv` |
 | `scripts/ashell-install.sh` | a-Shell one-liner: pip + fetch code + scaffold `.ssienv` |
 | `reference/ssi_logbook_api.md` | reverse-engineered logbook + locator API |
 | `tests/data/*.fit` | `sample_dive.fit` (no GPS), `dive_with_gps.fit` (lap end fix) |

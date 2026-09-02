@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from .ssi import Identity
+from .model import Identity
 
 
 @dataclass

@@ -1,5 +1,5 @@
-"""Normalised dive record. A parsed `.fit` maps into this shape; the MySSI
-form builder only ever sees a `Dive`."""
+"""Normalised dive record + diver identity. A parsed `.fit` maps into `Dive`;
+the MySSI form builder only ever sees a `Dive` and an `Identity`."""
 
 from __future__ import annotations
 
@@ -19,9 +19,18 @@ class Dive:
     avg_depth_m: float | None = None
     water_temp_c: float | None = None
     air_temp_c: float | None = None
-    surface_interval_s: int | None = None
     dive_number: int | None = None
     water_type: str | None = None  # "fresh" | "salt" | None
-    name: str | None = None
     lat: float | None = None       # surface position (degrees), if the FIT has one
     lng: float | None = None
+
+
+@dataclass
+class Identity:
+    """Static per-diver values baked into every logged dive. `user_master_id` is
+    your MySSI member id (Profile screen)."""
+
+    user_master_id: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    leader_id: str | None = None  # instructor / dive-leader SSI id, if you always log one

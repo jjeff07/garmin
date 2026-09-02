@@ -9,3 +9,8 @@ __pycache__/
 .pytest_cache/
 
 # keep uv.lock committed for reproducible CI installs
+
+# local run artifacts
+incoming/
+processed/
+state/

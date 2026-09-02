@@ -84,11 +84,8 @@ def parse_fit_bytes(data: bytes) -> Dive:
         max_depth_m=float(max_depth),
         avg_depth_m=_val(summ, "avg_depth"),
         water_temp_c=None if water_temp is None else float(water_temp),
-        air_temp_c=None,
-        surface_interval_s=_val(summ, "surface_interval"),
         dive_number=_val(summ, "dive_number"),
         water_type=_val(dive_settings, "water_type"),
-        name=_val(_first(messages, "sport"), "name"),
         lat=lat,
         lng=lng,
     )

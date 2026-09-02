@@ -14,9 +14,7 @@ from __future__ import annotations
 import re
 
 from ._http import Session
-
-from .model import Dive
-from .ssi import Identity
+from .model import Dive, Identity
 
 ENDPOINT = "https://my.divessi.com/code/process/mydivelog_18.php"
 SIGNIN = "https://www.divessi.com/bridge/code/process/signin"

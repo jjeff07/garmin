@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from garmin_ssi.fit import parse_fit_file
-from garmin_ssi.ssi import Identity, build_ssi
 
 SAMPLE = Path(__file__).parent / "data" / "sample_dive.fit"
 WITH_GPS = Path(__file__).parent / "data" / "dive_with_gps.fit"
@@ -29,13 +28,3 @@ def test_surface_position_from_lap_end():
     # lap.end_position_lat/long semicircles -> White Star Quarry (~41.37, -83.31)
     assert d.lat == pytest.approx(41.3705, abs=0.01)
     assert d.lng == pytest.approx(-83.3122, abs=0.01)
-
-
-def test_sample_dive_to_ssi():
-    d = parse_fit_file(SAMPLE)
-    ident = Identity(user_master_id="REPLACE", first_name="First", last_name="Last")
-    s = build_ssi(d, ident)
-    assert s == (
-        "dive;noid;dive_type:0;datetime:202606061710;divetime:24;depth_m:3.8;"
-        "user_master_id:REPLACE;user_firstname:First;user_lastname:Last;watertemp_c:27"
-    )
