@@ -10,7 +10,8 @@ from garmin_ssi.fit_push import (
     save_ledger,
 )
 
-SAMPLE = str(Path(__file__).parent / "data" / "sample_dive.fit")
+SAMPLE = str(Path(__file__).parent / "data" / "sample_dive.fit")        # no GPS
+WITH_GPS = str(Path(__file__).parent / "data" / "dive_with_gps.fit")    # lap end fix
 
 
 def test_fit_sha_stable_and_short():
@@ -43,16 +44,32 @@ def test_load_env_file(tmp_path, monkeypatch):
     assert os.environ["SSI_DIVE_SITE_ID"] == "1965"
 
 
-def test_cli_lat_lng_override(capsys, monkeypatch):
+def _stub_locator(monkeypatch):
     import garmin_ssi.ssi_sites as ss
     monkeypatch.setattr(
         ss, "nearest_site_id",
-        lambda lat, lng, **k: {"id": "1965", "name": "White Star Quarry", "dist_km": 2.0},
+        lambda lat, lng, **k: {"id": "1965", "name": f"stub@{lat:.3f},{lng:.3f}", "dist_km": 1.0},
     )
-    rc = main([SAMPLE, "--lat", "41.3871", "--lng", "-83.3027", "--dry-run"])
-    assert rc == 0
+
+
+def test_cli_lat_lng_fills_in_when_fit_has_no_fix(capsys, monkeypatch):
+    _stub_locator(monkeypatch)
+    assert main([SAMPLE, "--lat", "41.3871", "--lng", "-83.3027", "--dry-run"]) == 0
+    assert "stub@41.387,-83.303" in capsys.readouterr().out
+
+
+def test_cli_lat_lng_ignored_when_fit_has_a_fix(capsys, monkeypatch):
+    _stub_locator(monkeypatch)
+    assert main([WITH_GPS, "--lat", "1.0", "--lng", "2.0", "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "White Star Quarry" in out and "41.3871,-83.3027" in out
+    assert "ignoring --lat/--lng" in out
+    assert "stub@41.37" in out  # used the FIT's WSQ fix, not 1,2
+
+
+def test_cli_force_coords_overrides_fit_fix(capsys, monkeypatch):
+    _stub_locator(monkeypatch)
+    assert main([WITH_GPS, "--lat", "1.0", "--lng", "2.0", "--force-coords", "--dry-run"]) == 0
+    assert "stub@1.000,2.000" in capsys.readouterr().out
 
 
 def test_dry_run_maps_without_auth(capsys):

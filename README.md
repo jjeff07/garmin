@@ -7,7 +7,7 @@ pure dependency (`fitparse`); HTTP is stdlib `urllib`, so it also runs on iOS in
 
 ```
 dive.fit  ──parse──▶  Dive  ──▶  dive site from GPS  (public SSI locator)
-                                 │  FIT surface fix → phone location → SSI_DIVE_SITE_ID
+                                 │  FIT's own GPS fix → phone location (pool dives) → SSI_DIVE_SITE_ID
                                  ▼
                        log in to MySSI  ──▶  POST /code/process/mydivelog_18.php
                                  ▼
@@ -41,7 +41,8 @@ secrets):
 
 Copy [`sample.env`](sample.env) to `.ssienv` and fill it in.
 
-CLI flags: `--env-file <file>` (load the vars), `--lat/--lng` (override coords),
+CLI flags: `--env-file <file>` (load the vars), `--lat/--lng` (fallback coords,
+used only when the FIT has no GPS; `--force-coords` to override a fix),
 `--force` (ignore the pushed-fits ledger), `--dry-run`, `--ledger <path>`.
 
 ## On the phone (a-Shell + a Shortcut)
@@ -52,11 +53,11 @@ a-Shell with your location, a-Shell runs `garmin-ssi-fit`.
 
 ## Dive site resolution
 
-1. **FIT surface fix** — `session`/`lap` `start_position` / `end_position`
-   (semicircles). A Descent only fixes GPS at the surface, so a pool dive won't
-   have one.
-2. **Phone location** — `--lat/--lng`, or a `dive-<epoch>.json` sidecar
-   `{"lat": …, "lng": …}` next to the FIT.
+1. **The FIT's own GPS fix** — `session`/`lap` `start_position` / `end_position`
+   (semicircles). Always wins when present. A Descent fixes GPS only at the
+   surface, so a pool dive won't have one.
+2. **Phone location** (`--lat/--lng`, or a `dive-<epoch>.json` sidecar) — used
+   *only* when step 1 found nothing. `--force-coords` overrides a real fix.
 3. Coords → `POST www.divessi.com/api/locationServices.php` (public locator,
    `ssi_sites.py`; bootstraps its own cookie + `SSI_APIKEY`) → nearest site
    within 5 km, real `id`.

@@ -65,7 +65,7 @@ New Shortcut in the Shortcuts app, these actions in order:
 | 1 | **Get File** | Turn on *Show Document Picker*. (Or set the shortcut to *Receive Files from Share Sheet* and skip this.) |
 | 2 | **Base64 Encode** | input = step 1's file |
 | 3 | **Replace Text** | Find `\n` (**regex on**), Replace *(empty)*; input = step 2. Set variable **B64**. |
-| 4 | **Get Current Location** | — |
+| 4 | **Get Current Location** | only used if the FIT has no GPS (pool dives); ignored when it does |
 | 5 | **Run a-Shell command** — **Input: None** | Command: <br>`printf %s "B64" \| base64 -d > ~/Documents/dive.fit && python ~/Documents/dive-push.py ~/Documents/dive.fit --lat LAT --lng LNG 2>&1` <br> insert **B64** and the **Latitude** / **Longitude** magic variables. Turn on **Run in Extension**. |
 | 6 | **Show Alert** (not Show Notification — it truncates) | Message: the output of step 5. |
 
@@ -94,8 +94,8 @@ save to Files, or share directly into the Shortcut.
 ## 3. What a run does
 
 ```
-parse dive.fit  →  lat/lng from --lat/--lng (else the FIT's own surface fix,
-                    else SSI_DIVE_SITE_ID)
+parse dive.fit  →  the FIT's own surface GPS fix, else --lat/--lng (phone
+                    location, for pool dives), else SSI_DIVE_SITE_ID
              →  POST divessi.com locator  →  nearest dive-site id
              →  log in to MySSI  →  POST the dive
              →  record sha256 in ~/Documents/state/pushed_fits.json

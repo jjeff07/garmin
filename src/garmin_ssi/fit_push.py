@@ -91,8 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="garmin-ssi-fit")
     ap.add_argument("fit", nargs="+", help="one or more .fit files")
     ap.add_argument("--env-file", help="load SSI_* vars from a KEY=VALUE file")
-    ap.add_argument("--lat", type=float, help="dive latitude (overrides the FIT / sidecar)")
-    ap.add_argument("--lng", type=float, help="dive longitude")
+    ap.add_argument("--lat", type=float, help="fallback latitude, used only if the FIT has no GPS fix")
+    ap.add_argument("--lng", type=float, help="fallback longitude (with --lat)")
+    ap.add_argument("--force-coords", action="store_true",
+                    help="use --lat/--lng even when the FIT has its own fix")
     ap.add_argument("--ledger", default=LEDGER_PATH)
     ap.add_argument("--dry-run", action="store_true", help="parse + map only")
     ap.add_argument("--force", action="store_true", help="ignore the pushed-fits ledger")
@@ -114,7 +116,11 @@ def main(argv: list[str] | None = None) -> int:
 
         dive = parse_fit_file(f)
         if args.lat is not None and args.lng is not None:
-            dive.lat, dive.lng = args.lat, args.lng
+            if dive.lat is None or dive.lng is None or args.force_coords:
+                dive.lat, dive.lng = args.lat, args.lng
+            else:
+                print(f"  FIT has GPS {dive.lat:.4f},{dive.lng:.4f} - ignoring --lat/--lng "
+                      "(pass --force-coords to override)")
         site_id = resolve_site_id(dive, cfg, f)
         body = dive_to_form(
             dive, cfg.identity,
