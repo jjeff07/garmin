@@ -142,11 +142,23 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         if client is None:  # first real push - require auth now
+            auth = "email+password" if cfg.ssi_email and cfg.ssi_password else (
+                "cookie" if cfg.ssi_cookie else "NONE")
+            print(f"  SSI auth={auth} user_id={cfg.identity.user_master_id} site={site_id}")
             if not cfg.ssi_auth_configured:
-                print("no SSI auth (SSI_EMAIL/SSI_PASSWORD or SSI_COOKIE)")
+                print("  ERROR: no SSI auth - set SSI_EMAIL+SSI_PASSWORD in .ssienv")
                 return 2
-            client = cfg.make_ssi_client()
-        res = client.create_dive(body)
+            try:
+                client = cfg.make_ssi_client()
+            except Exception as e:  # login failure
+                print(f"  ERROR: SSI login failed - {type(e).__name__}: {e}")
+                return 1
+        try:
+            res = client.create_dive(body)
+        except Exception as e:
+            print(f"  ERROR: push failed - {type(e).__name__}: {e}")
+            rc = 1
+            continue
         print(f"  MySSI: {res}")
         if res["ok"]:
             ledger[sha] = {"at": _now_iso(), "file": Path(f).name,
