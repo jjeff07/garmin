@@ -14,3 +14,9 @@ __pycache__/
 incoming/
 processed/
 state/
+
+# secrets / local artifacts - never commit
+.env
+.ssienv
+*.zip
+dive.fit
