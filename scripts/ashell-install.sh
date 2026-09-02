@@ -24,7 +24,7 @@ pip install fitparse || { echo "pip install failed" >&2; exit 1; }
 
 echo "== fetch garmin_ssi/ from $REPO@$BRANCH -> $DEST =="
 mkdir -p "$DEST"
-for f in __init__ _http config fit fit_push model ssi ssi_push ssi_sites; do
+for f in __init__ _http config fit fit_push model ssi_push ssi_sites; do
   url="https://raw.githubusercontent.com/$REPO/$BRANCH/src/garmin_ssi/$f.py"
   if curl -sfL -H "Authorization: Bearer $GH_PAT" -o "$DEST/$f.py" "$url"; then
     echo "  $f.py"
@@ -33,6 +33,12 @@ for f in __init__ _http config fit fit_push model ssi ssi_push ssi_sites; do
     exit 1
   fi
 done
+
+# launcher: run from anywhere, no cd / PYTHONPATH
+curl -sfL -H "Authorization: Bearer $GH_PAT" \
+  -o "$HOME/Documents/dive-push.py" \
+  "https://raw.githubusercontent.com/$REPO/$BRANCH/scripts/dive-push.py" \
+  && echo "  dive-push.py"
 
 if [ ! -f "$ENVF" ]; then
   cat > "$ENVF" <<'EOF'

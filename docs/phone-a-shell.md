@@ -43,11 +43,15 @@ Center, `1965` = White Star Quarry.
 **Updating later:** re-run the same one-liner (it re-fetches the `.py` files and
 leaves your `.ssienv` alone).
 
-**Smoke test** (no push):
+The installer also drops **`~/Documents/dive-push.py`** — a launcher that fixes
+`sys.path`, `chdir`s to `~/Documents` and loads `.ssienv` itself, so you never
+need `cd` or `PYTHONPATH` (the Shortcut's a-Shell command does **not** start in
+`~/Documents`).
+
+**Smoke test** (no push) — run from any directory:
 
 ```sh
-cd ~/Documents
-python -m garmin_ssi.fit_push some-dive.fit --env-file .ssienv --dry-run
+python ~/Documents/dive-push.py some-dive.fit --lat 41.37 --lng -83.31 --dry-run
 ```
 
 ---
@@ -59,14 +63,26 @@ New Shortcut in the Shortcuts app, these actions in order:
 | # | Action | Settings |
 |---|--------|----------|
 | 1 | **Get File** | Turn on *Show Document Picker*. (Or set the shortcut to *Receive Files from Share Sheet* and skip this.) |
-| 2 | **Get Current Location** | — |
-| 3 | **Save File** | File: the output of step 1. *Ask Where to Save* → **off**. Destination: `On My iPhone ▸ a-Shell ▸ dive.fit`. *Overwrite If File Exists* → **on**. |
-| 4 | **Text** | `cd ~/Documents && python -m garmin_ssi.fit_push dive.fit --env-file .ssienv --lat LAT --lng LNG 2>&1` — replace `LAT`/`LNG` by inserting the **Latitude** and **Longitude** magic variables from step 2. |
-| 5 | **Run a-Shell command** (a-Shell's action; may be *Execute Command*) | Command: the **Text** from step 4. Turn on **Run in Extension** (runs in the background, no app switch). |
-| 6 | **Show Notification** (or **Show Alert**) | Body: the output of step 5. |
+| 2 | **Base64 Encode** | input = step 1's file |
+| 3 | **Replace Text** | Find `\n` (**regex on**), Replace *(empty)*; input = step 2. Set variable **B64**. |
+| 4 | **Get Current Location** | — |
+| 5 | **Run a-Shell command** — **Input: None** | Command: <br>`printf %s "B64" \| base64 -d > ~/Documents/dive.fit && python ~/Documents/dive-push.py ~/Documents/dive.fit --lat LAT --lng LNG 2>&1` <br> insert **B64** and the **Latitude** / **Longitude** magic variables. Turn on **Run in Extension**. |
+| 6 | **Show Alert** (not Show Notification — it truncates) | Message: the output of step 5. |
+
+This writes the FIT *inside* a-Shell from the base64 text — no *Save File* /
+Files-picker dance. Your Connect exports are ~650 bytes (~900 base64 chars), so
+the command stays small.
 
 Add the Shortcut to the Share Sheet (Shortcut settings → *Show in Share Sheet*,
 accept *Files*) so you can run it straight from a `.fit` you exported.
+
+### If `printf %s` misbehaves in a-Shell
+
+Use a plain here-string via `echo` instead:
+`echo "B64" | base64 -d > ~/Documents/dive.fit && ...` — base64's alphabet has no
+`"`, `$` or backticks so double-quotes are safe. If output is still empty, run
+just `echo hi && python --version` (Input: None) + Show Alert to confirm a-Shell
+runs at all.
 
 ### Getting the `.fit` out of Garmin
 
@@ -90,5 +106,15 @@ Re-running the same file is a no-op (`--force` to override).
 
 ## 4. Updating
 
-Re-run the step-1 one-liner (or `sh ~/Documents/garmin_ssi/../ashell-install.sh`
-if you saved it). It re-fetches the nine `.py` files and keeps your `.ssienv`.
+Re-run the step-1 one-liner. It re-fetches the code + `dive-push.py` and keeps
+your `.ssienv`.
+
+## Debugging
+
+- `python ~/Documents/dive-push.py dive.fit --lat .. --lng .. --dry-run` in
+  a-Shell directly — full traceback, no Shortcut in the way.
+- The launcher prints `[dive-push] cwd=… python=…` first; if you don't see even
+  that, a-Shell isn't running the command (check the action's **Input: None**,
+  and Settings ▸ Shortcuts ▸ *Allow Running Scripts*).
+- `2>&1` on the command sends Python errors back too; show them with **Show
+  Alert** / **Quick Look**, never Show Notification.
